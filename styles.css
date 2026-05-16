@@ -644,16 +644,6 @@
     color: var(--text-normal);
 }
 
-.add-btn {
-    flex-shrink: 0;
-    background: var(--interactive-accent) !important;
-    color: var(--text-on-accent) !important;
-}
-
-.add-btn:hover {
-    background: var(--interactive-accent-hover) !important;
-}
-
 /* Pipeline Config Modal */
 .pipeline-config-modal {
     padding: 1rem;

@@ -27,7 +27,7 @@ export class WordPressAPI {
   private getAuthHeader(): string {
     const credentials = `${this.username}:${this.password}`;
     // Use btoa for base64 encoding
-    const encoded = globalThis.btoa(credentials);
+    const encoded = activeWindow.btoa(credentials);
     return `Basic ${encoded}`;
   }
 

@@ -235,14 +235,14 @@ export class SubstackAPI {
    * Upload an image to Substack CDN
    * @param publication - The publication subdomain
    * @param imageData - Binary image data as ArrayBuffer
-   * @param filename - Original filename with extension
+   * @param _filename - Original filename with extension (unused by Substack API but kept for interface parity)
    * @param mimeType - MIME type (image/png, image/jpeg, etc.)
    * @returns Image upload result with CDN URL
    */
   async uploadImage(
     publication: string,
     imageData: ArrayBuffer,
-    filename: string,
+    _filename: string,
     mimeType: string
   ): Promise<{ success: boolean; data?: ImageUploadResult; error?: string }> {
     // Convert ArrayBuffer to base64 data URI
@@ -251,7 +251,7 @@ export class SubstackAPI {
     for (let i = 0; i < uint8Array.length; i++) {
       binary += String.fromCharCode(uint8Array[i] as number);
     }
-    const base64 = globalThis.btoa(binary);
+    const base64 = activeWindow.btoa(binary);
     const dataUri = `data:${mimeType};base64,${base64}`;
 
     // Substack expects form-urlencoded with "image" field containing data URI

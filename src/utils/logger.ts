@@ -96,7 +96,7 @@ export class Logger implements ILogger {
   private logLevel: LogLevel;
   private app: App | null = null;
   private logBuffer: string[] = [];
-  private flushTimeout: ReturnType<typeof setTimeout> | null = null;
+  private flushTimeout: number | null = null;
 
   constructor(
     name: string,
@@ -146,9 +146,9 @@ export class Logger implements ILogger {
 
     // Debounce writes
     if (this.flushTimeout) {
-      clearTimeout(this.flushTimeout);
+      activeWindow.clearTimeout(this.flushTimeout);
     }
-    this.flushTimeout = setTimeout(() => {
+    this.flushTimeout = activeWindow.setTimeout(() => {
       void this.flushLogs();
     }, 500);
   }
@@ -270,7 +270,7 @@ export class Logger implements ILogger {
     this.info("Plugin unloaded");
     // Force flush on unload
     if (this.flushTimeout) {
-      clearTimeout(this.flushTimeout);
+      activeWindow.clearTimeout(this.flushTimeout);
     }
     void this.flushLogs();
   }

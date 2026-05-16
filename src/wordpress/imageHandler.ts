@@ -333,7 +333,7 @@ export class WordPressImageHandler {
           const w = targetWidth;
           const h = Math.round(w * aspect);
 
-          const canvas = document.createElement("canvas");
+          const canvas = activeDocument.createElement("canvas");
           canvas.width = w * scale;
           canvas.height = h * scale;
           const ctx = canvas.getContext("2d");
@@ -498,9 +498,9 @@ export class WordPressImageHandler {
    */
   private async renderTikzToPng(tikzCode: string, index: number): Promise<string | null> {
     // Create a hidden container in the DOM
-    const container = document.createElement("div");
+    const container = activeDocument.createElement("div");
     container.classList.add("tikz-render-container");
-    document.body.appendChild(container);
+    activeDocument.body.appendChild(container);
 
     try {
       // Render the TikZ block via Obsidian's MarkdownRenderer (triggers tikzjax)
@@ -543,7 +543,7 @@ export class WordPressImageHandler {
       this.logger.warn(`TikZ upload failed: ${uploadResult.error}`);
       return null;
     } finally {
-      document.body.removeChild(container);
+      activeDocument.body.removeChild(container);
     }
   }
 
@@ -557,17 +557,17 @@ export class WordPressImageHandler {
     const stabilizeMs = 2000; // Wait 2s of no mutations after SVG appears
 
     return new Promise((resolve) => {
-      let stabilizeTimer: ReturnType<typeof setTimeout> | null = null;
+      let stabilizeTimer: number | null = null;
 
       const tryResolve = () => {
         const svg = container.querySelector("svg");
         if (svg) {
           // Reset the stabilize timer on every mutation — only resolve
           // once the SVG has been stable for stabilizeMs
-          if (stabilizeTimer) clearTimeout(stabilizeTimer);
-          stabilizeTimer = setTimeout(() => {
+          if (stabilizeTimer) activeWindow.clearTimeout(stabilizeTimer);
+          stabilizeTimer = activeWindow.setTimeout(() => {
             observer.disconnect();
-            clearTimeout(deadlineTimer);
+            activeWindow.clearTimeout(deadlineTimer);
             resolve(svg as SVGElement);
           }, stabilizeMs);
         }
@@ -583,9 +583,9 @@ export class WordPressImageHandler {
       tryResolve();
 
       // Hard deadline — resolve with whatever we have
-      const deadlineTimer = setTimeout(() => {
+      const deadlineTimer = activeWindow.setTimeout(() => {
         observer.disconnect();
-        if (stabilizeTimer) clearTimeout(stabilizeTimer);
+        if (stabilizeTimer) activeWindow.clearTimeout(stabilizeTimer);
         const svg = container.querySelector("svg");
         resolve(svg as SVGElement | null);
       }, timeoutMs);
@@ -616,7 +616,7 @@ export class WordPressImageHandler {
     // Also check computed styles on text elements
     svgElement.querySelectorAll("text").forEach(el => {
       try {
-        const computed = getComputedStyle(el);
+        const computed = activeWindow.getComputedStyle(el);
         const ff = computed.fontFamily;
         if (ff) fontFamilies.add(ff.replace(/['"]/g, "").split(",")[0]?.trim() || "");
       } catch { /* ignore */ }
@@ -633,7 +633,7 @@ export class WordPressImageHandler {
     // Find matching @font-face rules in document stylesheets
     const inlinedRules: string[] = [];
 
-    for (const sheet of Array.from(document.styleSheets)) {
+    for (const sheet of Array.from(activeDocument.styleSheets)) {
       let rules: CSSRuleList;
       try {
         rules = sheet.cssRules;
@@ -662,7 +662,7 @@ export class WordPressImageHandler {
             for (let j = 0; j < bytes.length; j++) {
               binary += String.fromCharCode(bytes[j]!);
             }
-            const b64 = globalThis.btoa(binary);
+            const b64 = activeWindow.btoa(binary);
             // Guess MIME from URL extension
             const ext = fontUrl.split(".").pop()?.split("?")[0]?.toLowerCase() || "";
             const mimeMap: Record<string, string> = { woff2: "font/woff2", woff: "font/woff", ttf: "font/ttf", otf: "font/otf" };
@@ -689,11 +689,11 @@ export class WordPressImageHandler {
     const svgNS = "http://www.w3.org/2000/svg";
     let defs = svgElement.querySelector("defs");
     if (!defs) {
-      defs = document.createElementNS(svgNS, "defs");
+      defs = activeDocument.createElementNS(svgNS, "defs");
       svgElement.prepend(defs);
     }
 
-    const styleEl = document.createElementNS(svgNS, "style");
+    const styleEl = activeDocument.createElementNS(svgNS, "style");
     styleEl.textContent = inlinedRules.join("\n");
     defs.appendChild(styleEl);
   }
@@ -712,7 +712,7 @@ export class WordPressImageHandler {
         const w = targetWidth;
         const h = Math.round(w * aspect);
 
-        const canvas = document.createElement("canvas");
+        const canvas = activeDocument.createElement("canvas");
         canvas.width = w * scale;
         canvas.height = h * scale;
         const ctx = canvas.getContext("2d");

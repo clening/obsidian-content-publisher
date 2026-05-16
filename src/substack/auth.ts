@@ -185,11 +185,11 @@ export class SubstackAuth {
         // Check on any page that's not the sign-in page
         if (!url.includes("sign-in") && !url.includes("magic-link")) {
           // Wait for cookies to be fully set
-          setTimeout(() => {
+          activeWindow.setTimeout(() => {
             void checkCookie().then((found) => {
               if (!found) {
                 // Retry after another delay
-                setTimeout(() => {
+                activeWindow.setTimeout(() => {
                   void checkCookie();
                 }, 2000);
               }
@@ -213,9 +213,9 @@ export class SubstackAuth {
       );
 
       // Also check periodically as fallback
-      const intervalId = setInterval(() => {
+      const intervalId = activeWindow.setInterval(() => {
         if (authWindow.isDestroyed() || cookieCaptured) {
-          clearInterval(intervalId);
+          activeWindow.clearInterval(intervalId);
           return;
         }
         const currentUrl = authWindow.webContents.getURL();
@@ -229,7 +229,7 @@ export class SubstackAuth {
 
       // Cleanup on close
       authWindow.on("closed", () => {
-        clearInterval(intervalId);
+        activeWindow.clearInterval(intervalId);
         if (!cookieCaptured) {
           new Notice(
             "Login window closed. Cookie was not captured - please try again."

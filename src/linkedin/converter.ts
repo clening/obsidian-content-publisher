@@ -56,7 +56,7 @@ export class LinkedInMarkdownConverter {
     text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)");
 
     // Convert wikilinks to plain text
-    text = text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, link, display) => {
+    text = text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_: string, link: string, display: string | undefined) => {
       return display || link;
     });
 

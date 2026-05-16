@@ -107,8 +107,8 @@ export class WikiLinkConverter {
       const cache = this.app.metadataCache.getFileCache(targetFile);
       if (!cache?.frontmatter) continue;
 
-      const fm = cache.frontmatter;
-      const wordpressUrl = fm.wordpress_url || fm.wordpress_url_fr || fm.wordpress_url_en;
+      const fm = cache.frontmatter as Record<string, unknown>;
+      const wordpressUrl = fm.wordpress_url ?? fm.wordpress_url_fr ?? fm.wordpress_url_en;
 
       if (wordpressUrl && typeof wordpressUrl === "string") {
         this.logger.debug(`Found wordpress_url for "${linkText}" (${lang || "default"}): ${wordpressUrl}`);
@@ -308,10 +308,10 @@ export class WikiLinkConverter {
       if (!hasLink) continue;
 
       // Check if source file is published (has wordpress_url)
-      const fm = cache.frontmatter;
+      const fm = cache.frontmatter as Record<string, unknown> | undefined;
       if (!fm) continue;
 
-      const wordpressUrl = fm.wordpress_url || fm.wordpress_url_fr;
+      const wordpressUrl = fm.wordpress_url ?? fm.wordpress_url_fr;
       if (!wordpressUrl || typeof wordpressUrl !== "string") continue;
 
       const backlinkEntry: {

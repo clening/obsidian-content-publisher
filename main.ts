@@ -125,7 +125,7 @@ export default class SubstackPublisherPlugin extends Plugin {
 
       // Move WordPress icon to bottom too
       this.app.workspace.onLayoutReady(() => {
-        setTimeout(() => {
+        activeWindow.setTimeout(() => {
           wpRibbonIconEl.parentElement?.appendChild(wpRibbonIconEl);
         }, 100);
       });
@@ -144,7 +144,7 @@ export default class SubstackPublisherPlugin extends Plugin {
 
       // Move LinkedIn icon to bottom too
       this.app.workspace.onLayoutReady(() => {
-        setTimeout(() => {
+        activeWindow.setTimeout(() => {
           liRibbonIconEl.parentElement?.appendChild(liRibbonIconEl);
         }, 100);
       });
@@ -152,7 +152,7 @@ export default class SubstackPublisherPlugin extends Plugin {
 
     // Move icon to bottom of ribbon after layout is ready
     this.app.workspace.onLayoutReady(() => {
-      setTimeout(() => {
+      activeWindow.setTimeout(() => {
         ribbonIconEl.parentElement?.appendChild(ribbonIconEl);
       }, 100);
     });
@@ -927,22 +927,22 @@ export default class SubstackPublisherPlugin extends Plugin {
     const errors: string[] = [];
 
     // Create ONE persistent notice with all articles listed
-    const noticeFragment = document.createDocumentFragment();
-    const noticeContainer = document.createElement("div");
+    const noticeFragment = createFragment();
+    const noticeContainer = activeDocument.createElement("div");
     noticeContainer.classList.add("batch-notice-container");
 
     // Header
-    const header = document.createElement("div");
+    const header = activeDocument.createElement("div");
     header.classList.add("batch-notice-header");
-    header.textContent = `Publication de ${mdFiles.length} articles ${folder.name}`;
+    header.textContent = `Publishing ${mdFiles.length} articles from ${folder.name}`;
     noticeContainer.appendChild(header);
 
     // Create a line for each article
     const articleLines: Map<string, HTMLSpanElement> = new Map();
     for (const file of mdFiles) {
-      const line = document.createElement("div");
+      const line = activeDocument.createElement("div");
       line.classList.add("batch-notice-line");
-      const statusSpan = document.createElement("span");
+      const statusSpan = activeDocument.createElement("span");
       statusSpan.textContent = `📄 ${file.basename}`;
       line.appendChild(statusSpan);
       noticeContainer.appendChild(line);
@@ -990,13 +990,13 @@ export default class SubstackPublisherPlugin extends Plugin {
     }
 
     // Update header with final summary
-    header.textContent = `✅ Publication terminée: ${successCount} réussi(s)${errorCount > 0 ? `, ${errorCount} erreur(s)` : ""}`;
+    header.textContent = `✅ Publish complete: ${successCount} succeeded${errorCount > 0 ? `, ${errorCount} error(s)` : ""}`;
     if (errorCount > 0) {
       this.logger.warn("Batch errors:", errors);
     }
 
     // Auto-hide after 5 seconds
-    setTimeout(() => batchNotice.hide(), 5000);
+    activeWindow.setTimeout(() => batchNotice.hide(), 5000);
   }
 
   /**
@@ -1074,20 +1074,20 @@ export default class SubstackPublisherPlugin extends Plugin {
     const errors: string[] = [];
 
     // Create ONE persistent notice with all articles listed
-    const noticeFragment = document.createDocumentFragment();
-    const noticeContainer = document.createElement("div");
+    const noticeFragment = createFragment();
+    const noticeContainer = activeDocument.createElement("div");
     noticeContainer.classList.add("batch-notice-container");
 
-    const header = document.createElement("div");
+    const header = activeDocument.createElement("div");
     header.classList.add("batch-notice-header");
-    header.textContent = `Republication de ${matchingFiles.length} articles — ${server.name}`;
+    header.textContent = `Republishing ${matchingFiles.length} articles — ${server.name}`;
     noticeContainer.appendChild(header);
 
     const articleLines: Map<string, HTMLSpanElement> = new Map();
     for (const file of matchingFiles) {
-      const line = document.createElement("div");
+      const line = activeDocument.createElement("div");
       line.classList.add("batch-notice-line");
-      const statusSpan = document.createElement("span");
+      const statusSpan = activeDocument.createElement("span");
       statusSpan.textContent = `📄 ${file.basename}`;
       line.appendChild(statusSpan);
       noticeContainer.appendChild(line);
@@ -1121,13 +1121,13 @@ export default class SubstackPublisherPlugin extends Plugin {
     }
 
     // Update header with final summary
-    header.textContent = `✅ Republication terminée: ${successCount} réussi(s)${errorCount > 0 ? `, ${errorCount} erreur(s)` : ""}`;
+    header.textContent = `✅ Republish complete: ${successCount} succeeded${errorCount > 0 ? `, ${errorCount} error(s)` : ""}`;
     if (errorCount > 0) {
       this.logger.warn("Republish errors:", errors);
     }
 
     // Auto-hide after 5 seconds
-    setTimeout(() => batchNotice.hide(), 5000);
+    activeWindow.setTimeout(() => batchNotice.hide(), 5000);
   }
 
   /**
@@ -2164,7 +2164,7 @@ class SubstackPublisherSettingTab extends PluginSettingTab {
 
     if (this.plugin.settings.linkedinEnabled) {
       // Access token field
-      const tokenDesc = document.createDocumentFragment();
+      const tokenDesc = createFragment();
       tokenDesc.appendText("Your OAuth2 access token (starts with 'AQ...')");
       new Setting(containerEl)
         .setName("Access token")
@@ -2182,7 +2182,7 @@ class SubstackPublisherSettingTab extends PluginSettingTab {
         });
 
       // Person ID field
-      const personIdDesc = document.createDocumentFragment();
+      const personIdDesc = createFragment();
       personIdDesc.appendText("Your LinkedIn member ID (from /v2/userinfo 'sub' field, e.g., 'abc123XYZ')");
       new Setting(containerEl)
         .setName("Person ID")

@@ -176,7 +176,7 @@ export class WordPressPostComposer extends Modal {
         // Info: EN version will be published too
         const infoDiv = contentEl.createDiv({ cls: "wordpress-info-banner" });
         infoDiv.createEl("span", {
-          text: "English version detected in _en/ — will be published automatically"
+          text: "English version detected — will be published automatically"
         });
       } else {
         // Warning: No EN version
@@ -563,7 +563,7 @@ export class WordPressPostComposer extends Modal {
       // Load English frontmatter
       const cache = this.app.metadataCache.getFileCache(englishFile);
       if (cache?.frontmatter) {
-        const fm = cache.frontmatter;
+        const fm = cache.frontmatter as Record<string, unknown>;
         if (typeof fm.title === "string") this.englishFrontmatter.title = fm.title;
         if (typeof fm.slug === "string") this.englishFrontmatter.slug = fm.slug;
         if (typeof fm.excerpt === "string") this.englishFrontmatter.excerpt = fm.excerpt;
@@ -607,7 +607,7 @@ export class WordPressPostComposer extends Modal {
     });
 
     if (cache?.frontmatter) {
-      const fm = cache.frontmatter;
+      const fm = cache.frontmatter as Record<string, unknown>;
       const parsed: WordPressFrontmatter = {};
 
       if (typeof fm.title === "string") {
@@ -830,7 +830,7 @@ export class WordPressPostComposer extends Modal {
     // Process H1: wrap first letter in screen-reader-text span for SEO
     const processedBodyHtml = bodyHtml.replace(
       /<h1([^>]*)>(.+?)<\/h1>/i,
-      (_match, attrs, content) => {
+      (_match: string, attrs: string, content: string) => {
         const trimmedContent = content.trim();
         const firstLetter = trimmedContent.charAt(0);
         const restOfTitle = trimmedContent.slice(1);
@@ -1251,7 +1251,7 @@ ${illustrationImg}
     try {
       await this.app.fileManager.processFrontMatter(
         this.activeFile,
-        (frontmatter) => {
+        (frontmatter: Record<string, unknown>) => {
           frontmatter.type = type;
           frontmatter.wordpress_id = wordpressId;
           frontmatter.wordpress_url = wordpressUrl;
@@ -1458,7 +1458,8 @@ ${illustrationImg}
     // Process images - get enluminure from frontmatter if present
     const basePath = file.parent?.path || "";
     const fileCache = this.app.metadataCache.getFileCache(file);
-    const fileEnluminure = fileCache?.frontmatter?.enluminure;
+    const fileFm = fileCache?.frontmatter as Record<string, unknown> | undefined;
+    const fileEnluminure = fileFm?.enluminure;
     const imageResult = await this.imageHandler.processMarkdownImages(
       cleanContent,
       basePath,
@@ -1476,13 +1477,16 @@ ${illustrationImg}
     // Handle enluminure if present
     if (imageResult.enluminure?.wordpressUrl) {
       const cache = this.app.metadataCache.getFileCache(file);
-      const title = cache?.frontmatter?.title || file.basename;
+      const cacheFm = cache?.frontmatter as Record<string, unknown> | undefined;
+      const titleRaw = cacheFm?.title;
+      const title = typeof titleRaw === "string" ? titleRaw : file.basename;
       finalHtml = this.generateEnluminureHtml(imageResult.enluminure, title, finalHtml);
     }
 
     // Get frontmatter to determine type
     const cache = this.app.metadataCache.getFileCache(file);
-    const isPage = cache?.frontmatter?.type === "page";
+    const cacheFm = cache?.frontmatter as Record<string, unknown> | undefined;
+    const isPage = cacheFm?.type === "page";
 
     // Update on WordPress
     if (isPage) {
@@ -1678,7 +1682,7 @@ ${illustrationImg}
         try {
           await this.app.fileManager.processFrontMatter(
             this.activeFile,
-            (frontmatter) => {
+            (frontmatter: Record<string, unknown>) => {
               frontmatter.wordpress_url_fr = frUrl;
               frontmatter.wordpress_url_en = enUrl;
             }
@@ -2037,7 +2041,7 @@ ${illustrationImg}
 
       // Update FR frontmatter
       try {
-        await this.app.fileManager.processFrontMatter(this.activeFile, (fm) => {
+        await this.app.fileManager.processFrontMatter(this.activeFile, (fm: Record<string, unknown>) => {
           fm.wordpress_url = frUrl;
           fm.wordpress_id = frPostId;
         });
@@ -2047,7 +2051,7 @@ ${illustrationImg}
 
       // Update EN frontmatter
       try {
-        await this.app.fileManager.processFrontMatter(this.englishFile, (fm) => {
+        await this.app.fileManager.processFrontMatter(this.englishFile, (fm: Record<string, unknown>) => {
           fm.wordpress_url = enUrl;
           fm.wordpress_id = enResult.data?.id;
         });

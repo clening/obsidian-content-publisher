@@ -15,6 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Required for actions/attest-build-provenance: the action signs the
+      # SLSA provenance via Sigstore and publishes it to the GitHub attestation
+      # store, which the Obsidian Community Plugin Store scan verifies.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +32,14 @@ jobs:
         run: |
           npm install
           npm run build
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Create release
         env:

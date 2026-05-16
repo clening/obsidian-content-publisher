@@ -451,7 +451,7 @@ export class SubstackPostComposer extends Modal {
 
     const cache = this.app.metadataCache.getFileCache(this.activeFile);
     if (cache?.frontmatter) {
-      const fm = cache.frontmatter;
+      const fm = cache.frontmatter as Record<string, unknown>;
       const parsed: SubstackFrontmatter = {};
 
       if (typeof fm.title === "string") {
@@ -801,7 +801,7 @@ export class SubstackPostComposer extends Modal {
     try {
       await this.app.fileManager.processFrontMatter(
         this.activeFile,
-        (frontmatter) => {
+        (frontmatter: Record<string, unknown>) => {
           // Use language-specific key for bilingual content
           if (this.isBilingual) {
             const key = this.selectedLanguage === "fr"
@@ -899,7 +899,8 @@ export class SubstackPostComposer extends Modal {
         );
 
         if (response.status === 200 || response.status === 201) {
-          draftId = response.json?.id as string | undefined;
+          const respJson = response.json as { id?: unknown } | undefined;
+          draftId = typeof respJson?.id === "string" ? respJson.id : undefined;
         } else {
           throw new Error(this.getErrorMessage(response.status));
         }
@@ -1004,7 +1005,8 @@ export class SubstackPostComposer extends Modal {
           throw new Error(this.getErrorMessage(draftResponse.status));
         }
 
-        draftId = draftResponse.json?.id as string | undefined;
+        const draftRespJson = draftResponse.json as { id?: unknown } | undefined;
+        draftId = typeof draftRespJson?.id === "string" ? draftRespJson.id : undefined;
         if (!draftId) {
           throw new Error("Invalid response from Substack: missing draft ID");
         }
@@ -1077,7 +1079,7 @@ export class SubstackPostComposer extends Modal {
       if (substackUrl) {
         await this.app.fileManager.processFrontMatter(
           this.activeFile,
-          (frontmatter) => {
+          (frontmatter: Record<string, unknown>) => {
             // Use language-specific key for bilingual content
             if (this.isBilingual) {
               const key = this.selectedLanguage === "fr"

@@ -44,6 +44,10 @@ export default [
         FileReader: "readonly",
         getComputedStyle: "readonly",
         fetch: "readonly",
+        // Obsidian-injected globals (declared in obsidian.d.ts, invisible to ESLint)
+        activeWindow: "readonly",
+        activeDocument: "readonly",
+        createFragment: "readonly",
       },
     },
     plugins: {

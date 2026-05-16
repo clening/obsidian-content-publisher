@@ -365,7 +365,7 @@ export class LinkedInPostComposer extends Modal {
 
     const cache = this.app.metadataCache.getFileCache(this.activeFile);
     if (cache?.frontmatter) {
-      const fm = cache.frontmatter;
+      const fm = cache.frontmatter as Record<string, unknown>;
       const parsed: LinkedInFrontmatter = {};
 
       if (typeof fm.title === "string") {
@@ -524,7 +524,7 @@ export class LinkedInPostComposer extends Modal {
     try {
       await this.app.fileManager.processFrontMatter(
         this.activeFile,
-        (frontmatter) => {
+        (frontmatter: Record<string, unknown>) => {
           if (this.isBilingual) {
             const urlKey =
               this.selectedLanguage === "fr"
@@ -860,7 +860,7 @@ export class LinkedInPostComposer extends Modal {
     try {
       await this.app.fileManager.processFrontMatter(
         this.activeFile,
-        (frontmatter) => {
+        (frontmatter: Record<string, unknown>) => {
           if (this.isBilingual) {
             const draftKey =
               this.selectedLanguage === "fr"
@@ -893,7 +893,7 @@ export class LinkedInPostComposer extends Modal {
     try {
       await this.app.fileManager.processFrontMatter(
         this.activeFile,
-        (frontmatter) => {
+        (frontmatter: Record<string, unknown>) => {
           if (this.isBilingual) {
             const urlKey =
               this.selectedLanguage === "fr"

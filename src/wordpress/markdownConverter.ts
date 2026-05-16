@@ -27,7 +27,7 @@ export function convertMarkdownToHtml(markdown: string): string {
 
   // Extract mermaid blocks as placeholders before code-block extraction
   const mermaidBlocks: string[] = [];
-  html = html.replace(/```mermaid\r?\n([\s\S]*?)```/g, (_, code) => {
+  html = html.replace(/```mermaid\r?\n([\s\S]*?)```/g, (_: string, code: string) => {
     const idx = mermaidBlocks.length;
     // Fix subgraph labels for mermaid v11 compatibility:
     // "subgraph My Title" → "subgraph _sg_N["My Title"]"
@@ -49,7 +49,7 @@ export function convertMarkdownToHtml(markdown: string): string {
   // First: code blocks inside blockquotes (> ```lang ... > ```)
   html = html.replace(
     /^>\s*```(\w*)\r?\n((?:^>.*\r?\n)*?)^>\s*```\s*$/gm,
-    (_, lang, code) => {
+    (_: string, lang: string, code: string) => {
       const stripped = code.replace(/^>\s?/gm, "");
       const trimmed = stripped.replace(/^\n+/, "").replace(/\n+$/, "");
       const escaped = trimmed
@@ -67,7 +67,7 @@ export function convertMarkdownToHtml(markdown: string): string {
   // Then: normal code blocks
   html = html.replace(
     /```(\w*)\r?\n([\s\S]*?)```/g,
-    (_, lang, code) => {
+    (_: string, lang: string, code: string) => {
       const trimmed = code.replace(/^\n+/, "").replace(/\n+$/, "");
       const escaped = trimmed
         .replace(/&/g, "&amp;")
@@ -89,7 +89,7 @@ export function convertMarkdownToHtml(markdown: string): string {
 
   // Inline code (restrict to single line to prevent cross-line matching)
   const inlineCodes: string[] = [];
-  html = html.replace(/`([^`\n]+)`/g, (_, code) => {
+  html = html.replace(/`([^`\n]+)`/g, (_: string, code: string) => {
     const escaped = code
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -103,13 +103,13 @@ export function convertMarkdownToHtml(markdown: string): string {
   // (underscore, asterisk, backslash in LaTeX would be corrupted by bold/italic regex)
   const latexBlocks: string[] = [];
   // Display math $$...$$ (multiline)
-  html = html.replace(/\$\$([\s\S]*?)\$\$/g, (_, tex) => {
+  html = html.replace(/\$\$([\s\S]*?)\$\$/g, (_: string, tex: string) => {
     const idx = latexBlocks.length;
     latexBlocks.push(`<div class="katex-display">$$${tex}$$</div>`);
     return `\n<!--LATEXBLOCK_${idx}-->\n`;
   });
   // Inline math $...$ (single $, not preceded/followed by space+$)
-  html = html.replace(/(?<!\$)\$(?!\$)([^\n$]+?)\$(?!\$)/g, (_, tex) => {
+  html = html.replace(/(?<!\$)\$(?!\$)([^\n$]+?)\$(?!\$)/g, (_: string, tex: string) => {
     const idx = latexBlocks.length;
     latexBlocks.push(`<span class="katex-inline">$${tex}$</span>`);
     return `<!--LATEXINLINE_${idx}-->`;
@@ -152,14 +152,14 @@ export function convertMarkdownToHtml(markdown: string): string {
   html = html.replace(/^[*-]\s+(.+)$/gm, "<li>$1</li>");
   html = html.replace(
     /(<li>.*<\/li>\n?)+/g,
-    (match) => `<ul>\n${match}</ul>\n`
+    (match: string) => `<ul>\n${match}</ul>\n`
   );
 
   // Ordered lists - use temporary <oli> tag to avoid conflict with <li> already inside <ul>
   html = html.replace(/^\d+\.\s+(.+)$/gm, "<oli>$1</oli>");
   html = html.replace(
     /(<oli>.*<\/oli>\n?)+/g,
-    (match) =>
+    (match: string) =>
       `<ol>\n${match.replace(/<oli>/g, "<li>").replace(/<\/oli>/g, "</li>")}</ol>\n`
   );
 
@@ -288,7 +288,7 @@ export function convertMarkdownToHtml(markdown: string): string {
 
   // Restore mermaid blocks
   if (mermaidBlocks.length > 0) {
-    finalHtml = finalHtml.replace(/<!--MERMAID_(\d+)-->/g, (_, idx) => {
+    finalHtml = finalHtml.replace(/<!--MERMAID_(\d+)-->/g, (_: string, idx: string) => {
       const code = mermaidBlocks[parseInt(idx, 10)] || "";
       return `<pre class="mermaid">\n${code}\n</pre>`;
     });

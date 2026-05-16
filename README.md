@@ -61,7 +61,7 @@ See [PLATFORMS.md](./docs/PLATFORMS.md) for detailed setup and frontmatter docum
 
 ## Installation
 
-### From Community Plugins (Coming Soon)
+### From Community Plugins
 
 1. Open **Settings → Community plugins**
 2. Search for "Content Publisher"
