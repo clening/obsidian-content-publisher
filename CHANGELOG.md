@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-05-16
+
+### Fixed
+
+- Address all 294 findings from the Obsidian Community Plugin Store scan:
+  - Type API responses and frontmatter access — eliminates ~120 `no-unsafe-*` errors from `typescript-eslint`'s `recommendedTypeChecked` preset.
+  - Popout-window compatibility: `document` → `activeDocument`, `setTimeout`/`setInterval` → `activeWindow.*`, `btoa` via `activeWindow`, `document.createDocumentFragment()` → `createFragment()`.
+  - Type `String.prototype.replace` callbacks in `markdownConverter.ts` and `wikiLinkConverter.ts` so capture groups are `string` instead of `any`.
+  - Rename unused `filename` arg to `_filename` in Substack `uploadImage`.
+  - Remove dead CSS rules using `!important`.
+  - Drop "Coming Soon" placeholder from README.
+  - Translate remaining French UI text in batch publish Notices.
+
+### Added
+
+- Release artifact attestation via `actions/attest-build-provenance@v2` — release assets now ship with a GitHub-signed provenance attestation.
+- `eslint.scan.config.js` reproduces the directory scanner output locally (typed lint + `obsidianmd/recommended`).
+
+### Changed
+
+- `npm audit fix`: clears vulnerable transitive devDeps (`postcss`, `rollup`, `yaml`). Vitest stays pinned at 3.2.4 because v4 requires Node 20+.
+
 ## [2.3.1] - 2026-02-27
 
 ### Fixed
