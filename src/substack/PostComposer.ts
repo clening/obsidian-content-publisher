@@ -76,7 +76,7 @@ export class SubstackPostComposer extends Modal {
     this.publications = publications;
     this.logger = logger;
     this.converter = new MarkdownConverter();
-    this.imageHandler = new ImageHandler(api, app.vault, logger);
+    this.imageHandler = new ImageHandler(api, app.vault, logger, app.metadataCache);
     this.wikiLinkConverter = new WikiLinkConverter(app, logger);
     this.defaults = defaults || {
       defaultPublication: publications[0] || "",

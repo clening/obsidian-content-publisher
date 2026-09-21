@@ -1,4 +1,4 @@
-import { TFile, Vault } from "obsidian";
+import { MetadataCache, TFile, Vault } from "obsidian";
 import { SubstackAPI } from "./api";
 import {
   ImageReference,
@@ -27,11 +27,46 @@ export class ImageHandler {
   private api: SubstackAPI;
   private vault: Vault;
   private logger: ILogger;
+  private metadataCache: MetadataCache | undefined;
 
-  constructor(api: SubstackAPI, vault: Vault, logger: ILogger) {
+  constructor(
+    api: SubstackAPI,
+    vault: Vault,
+    logger: ILogger,
+    metadataCache?: MetadataCache
+  ) {
     this.api = api;
     this.vault = vault;
     this.logger = logger;
+    this.metadataCache = metadataCache;
+  }
+
+  /**
+   * Fallback when an image isn't at its literal path: resolve the link the way
+   * Obsidian does (attachment folders, shortest-path links, URL-encoded names).
+   */
+  private resolveLinkedFile(linkPath: string, basePath: string): TFile | null {
+    let decoded = linkPath;
+    try {
+      decoded = decodeURI(linkPath);
+    } catch {
+      // Not URL-encoded; use as-is
+    }
+
+    if (decoded !== linkPath) {
+      const direct = this.vault.getAbstractFileByPath(
+        this.resolveImagePath(decoded, basePath)
+      );
+      if (direct instanceof TFile) return direct;
+    }
+
+    const sourcePath = basePath ? `${basePath}/` : "";
+    return (
+      this.metadataCache?.getFirstLinkpathDest(
+        decoded.replace(/^\//, ""),
+        sourcePath
+      ) ?? null
+    );
   }
 
   /**
@@ -213,17 +248,24 @@ export class ImageHandler {
    */
   async uploadImage(
     publication: string,
-    vaultPath: string
+    vaultPath: string,
+    link?: { path: string; basePath: string }
   ): Promise<{ success: boolean; url?: string; error?: string }> {
-    // Get file from vault
-    const file = this.vault.getAbstractFileByPath(vaultPath);
+    // Get file from vault, falling back to Obsidian's link resolution
+    let file = this.vault.getAbstractFileByPath(vaultPath);
+    if (!(file instanceof TFile) && link) {
+      file = this.resolveLinkedFile(link.path, link.basePath);
+      if (file) {
+        this.logger.debug(`Resolved image link: ${link.path} -> ${file.path}`);
+      }
+    }
 
     if (!file || !(file instanceof TFile)) {
       return { success: false, error: `File not found: ${vaultPath}` };
     }
 
     // Check extension
-    const extension = this.getExtension(vaultPath);
+    const extension = this.getExtension(file.path);
     if (!this.isSupportedFormat(extension)) {
       return {
         success: false,
@@ -321,7 +363,10 @@ export class ImageHandler {
 
       this.logger.debug(`Processing image: ${ref.path} -> ${vaultPath}`);
 
-      const result = await this.uploadImage(publication, vaultPath);
+      const result = await this.uploadImage(publication, vaultPath, {
+        path: ref.path,
+        basePath
+      });
 
       if (result.success && result.url) {
         // Replace the path in markdown with CDN URL

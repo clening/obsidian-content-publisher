@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ImageHandler } from "../src/substack/imageHandler";
 import { SubstackAPI } from "../src/substack/api";
-import { Vault, TFile } from "obsidian";
+import { Vault, TFile, MetadataCache } from "obsidian";
 
 // Mock TFile class for creating test instances
 class MockTFile {
@@ -736,4 +736,88 @@ More text
       expect(result.processedMarkdown).toContain("https://cdn.com/regular-image.png");
     });
   });
+
+  describe("Obsidian link resolution", () => {
+    let metadataCache: { getFirstLinkpathDest: ReturnType<typeof vi.fn> };
+
+    beforeEach(() => {
+      metadataCache = { getFirstLinkpathDest: vi.fn() };
+      imageHandler = new ImageHandler(
+        mockApi as unknown as SubstackAPI,
+        mockVault as unknown as Vault,
+        mockLogger,
+        metadataCache as unknown as MetadataCache,
+      );
+      mockVault.readBinary.mockResolvedValue(new ArrayBuffer(10));
+      mockApi.uploadImage.mockResolvedValue({
+        success: true,
+        data: { url: "https://substackcdn.com/x.png" },
+      });
+    });
+
+    it("finds embeds stored in an attachments folder", async () => {
+      const file = createMockFile("Attachments/photo.png", "photo.png", 10);
+      mockVault.getAbstractFileByPath.mockReturnValue(null);
+      metadataCache.getFirstLinkpathDest.mockReturnValue(file);
+
+      const result = await imageHandler.processMarkdownImages(
+        "mypub",
+        "![[photo.png|300]]",
+        "Drafts",
+      );
+
+      expect(metadataCache.getFirstLinkpathDest).toHaveBeenCalledWith(
+        "photo.png",
+        "Drafts/",
+      );
+      expect(result.errors).toHaveLength(0);
+      expect(result.uploadedImages).toEqual([
+        { originalPath: "photo.png", cdnUrl: "https://substackcdn.com/x.png" },
+      ]);
+    });
+
+    it("decodes URL-encoded Markdown image paths", async () => {
+      const file = createMockFile("Drafts/my photo.png", "my photo.png", 10);
+      mockVault.getAbstractFileByPath.mockImplementation((p: string) =>
+        p === "Drafts/my photo.png" ? file : null,
+      );
+
+      const result = await imageHandler.processMarkdownImages(
+        "mypub",
+        "![alt](my%20photo.png)",
+        "Drafts",
+      );
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.processedMarkdown).toBe(
+        "![alt](https://substackcdn.com/x.png)",
+      );
+      expect(metadataCache.getFirstLinkpathDest).not.toHaveBeenCalled();
+    });
+
+    it("prefers the literal path when it exists", async () => {
+      const file = createMockFile("photo.png", "photo.png", 10);
+      mockVault.getAbstractFileByPath.mockReturnValue(file);
+
+      await imageHandler.processMarkdownImages("mypub", "![[photo.png]]", "");
+
+      expect(metadataCache.getFirstLinkpathDest).not.toHaveBeenCalled();
+    });
+
+    it("reports missing images when the link resolves nowhere", async () => {
+      mockVault.getAbstractFileByPath.mockReturnValue(null);
+      metadataCache.getFirstLinkpathDest.mockReturnValue(null);
+
+      const result = await imageHandler.processMarkdownImages(
+        "mypub",
+        "![[missing.png]]",
+        "",
+      );
+
+      expect(result.errors).toEqual([
+        { path: "missing.png", error: "File not found: missing.png" },
+      ]);
+    });
+  });
 });
+
