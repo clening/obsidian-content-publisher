@@ -18,6 +18,14 @@ import {
 import { BilingualContent, PolylangLanguage } from "../wordpress/types";
 import { WikiLinkConverter } from "../wordpress/wikiLinkConverter";
 
+
+/** Substack returns draft IDs as numbers; the plugin handles them as strings. */
+function toDraftId(id: unknown): string | undefined {
+  if (typeof id === "string" && id) return id;
+  if (typeof id === "number") return String(id);
+  return undefined;
+}
+
 export interface PostComposerDefaults {
   defaultPublication: string;
   defaultSectionId: number | null;
@@ -767,7 +775,11 @@ export class SubstackPostComposer extends Modal {
         return null;
       }
 
-      const drafts = draftsResponse.json as SubstackDraftResponse[];
+      // post_management/drafts wraps the list as { posts: [...] }
+      const json = draftsResponse.json as
+        | SubstackDraftResponse[]
+        | { posts?: SubstackDraftResponse[] };
+      const drafts = Array.isArray(json) ? json : json.posts ?? [];
 
       // Search for a draft with matching title
       const matchingDraft = drafts.find(
@@ -779,7 +791,7 @@ export class SubstackPostComposer extends Modal {
           draftId: matchingDraft.id,
           title: matchingDraft.draft_title
         });
-        return matchingDraft.id;
+        return String(matchingDraft.id);
       }
 
       return null;
@@ -900,7 +912,7 @@ export class SubstackPostComposer extends Modal {
 
         if (response.status === 200 || response.status === 201) {
           const respJson = response.json as { id?: unknown } | undefined;
-          draftId = typeof respJson?.id === "string" ? respJson.id : undefined;
+          draftId = toDraftId(respJson?.id);
         } else {
           throw new Error(this.getErrorMessage(response.status));
         }
@@ -1006,7 +1018,7 @@ export class SubstackPostComposer extends Modal {
         }
 
         const draftRespJson = draftResponse.json as { id?: unknown } | undefined;
-        draftId = typeof draftRespJson?.id === "string" ? draftRespJson.id : undefined;
+        draftId = toDraftId(draftRespJson?.id);
         if (!draftId) {
           throw new Error("Invalid response from Substack: missing draft ID");
         }

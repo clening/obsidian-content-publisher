@@ -6,7 +6,19 @@ vi.mock("obsidian", () => ({
   requestUrl: vi.fn(),
 }));
 
-import { requestUrl } from "obsidian";
+import { requestUrl, type RequestUrlParam } from "obsidian";
+
+// Mock https for the custom-domain sign-in handshake
+const httpsResponses: Array<{ statusCode: number; headers: Record<string, unknown> }> = [];
+const httpsCalls: Array<{ url: string; headers: Record<string, string> }> = [];
+vi.mock("https", () => ({
+  get: (url: string, opts: { headers: Record<string, string> }, cb: (res: unknown) => void) => {
+    httpsCalls.push({ url, headers: opts.headers });
+    const res = httpsResponses.shift() ?? { statusCode: 500, headers: {} };
+    cb({ ...res, resume: () => {} });
+    return { on: () => {} };
+  }
+}));
 
 // Helper to create mock response matching RequestUrlResponse interface
 function mockResponse(status: number, json: unknown = {}) {
@@ -215,7 +227,7 @@ describe("SubstackAPI", () => {
 
       expect(requestUrl).toHaveBeenCalledWith(
         expect.objectContaining({
-          url: "https://mypub.substack.com/api/v1/drafts",
+          url: "https://mypub.substack.com/api/v1/post_management/drafts?offset=0&limit=25&order_by=draft_updated_at&order_direction=desc",
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -729,6 +741,126 @@ describe("SubstackAPI", () => {
 
       expect(response.status).toBe(200);
       expect(response.json).toEqual({ id: "draft-123", section_id: 42 });
+    });
+  });
+
+  describe("custom domains", () => {
+    const signInHandshake = () => {
+      httpsResponses.push(
+        {
+          statusCode: 303,
+          headers: { location: "https://news.example.com/api/v1/sign-in/local/complete?token=t" }
+        },
+        {
+          statusCode: 303,
+          headers: { "set-cookie": ["connect.sid=s%3Acustom; Path=/; HttpOnly", "other=1; Path=/"] }
+        }
+      );
+    };
+
+    beforeEach(() => {
+      httpsResponses.length = 0;
+      httpsCalls.length = 0;
+      api = new SubstackAPI("substack.sid=test123", {
+        customDomains: { mypub: "news.example.com" }
+      });
+    });
+
+    it("sends publication requests to the custom domain with its session cookie", async () => {
+      signInHandshake();
+      vi.mocked(requestUrl).mockResolvedValueOnce(mockResponse(200, []));
+
+      await api.getSections("mypub");
+
+      expect(httpsCalls[0]?.url).toBe(
+        "https://substack.com/sign-in?redirect=%2F&for_pub=mypub"
+      );
+      expect(httpsCalls[0]?.headers).toEqual({ Cookie: "substack.sid=test123" });
+      expect(requestUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: "https://news.example.com/api/v1/publication/sections",
+          headers: expect.objectContaining({ Cookie: "connect.sid=s%3Acustom" })
+        })
+      );
+    });
+
+    it("reuses the custom-domain session across requests", async () => {
+      signInHandshake();
+      vi.mocked(requestUrl).mockResolvedValue(mockResponse(200, {}));
+
+      await api.getDraft("mypub", "1");
+      await api.getDraft("mypub", "2");
+
+      expect(httpsCalls).toHaveLength(2);
+      expect(requestUrl).toHaveBeenCalledTimes(2);
+    });
+
+    it("gets a fresh session and retries once when rejected", async () => {
+      signInHandshake();
+      signInHandshake();
+      vi.mocked(requestUrl)
+        .mockResolvedValueOnce(mockResponse(403))
+        .mockResolvedValueOnce(mockResponse(200, { id: 5 }));
+
+      const response = await api.getDraft("mypub", "5");
+
+      expect(response.status).toBe(200);
+      expect(httpsCalls).toHaveLength(4);
+    });
+
+    it("throws a clear error when the substack.com session is invalid", async () => {
+      httpsResponses.push({ statusCode: 200, headers: {} });
+
+      await expect(api.getSections("mypub")).rejects.toThrow(/Custom domain sign-in failed/);
+    });
+
+    it("leaves publications without a custom domain unchanged", async () => {
+      vi.mocked(requestUrl).mockResolvedValueOnce(mockResponse(200, []));
+
+      await api.getSections("otherpub");
+
+      expect(httpsCalls).toHaveLength(0);
+      expect(requestUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: "https://otherpub.substack.com/api/v1/publication/sections",
+          headers: expect.objectContaining({ Cookie: "substack.sid=test123" })
+        })
+      );
+    });
+  });
+
+  describe("publication info", () => {
+    it("reports required custom domains and the user ID", async () => {
+      api = new SubstackAPI("substack.sid=test123");
+      vi.mocked(requestUrl).mockResolvedValueOnce(
+        mockResponse(200, {
+          id: 42,
+          publicationUsers: [
+            { publication: { subdomain: "a", custom_domain: "a.example.com", custom_domain_optional: false } },
+            { publication: { subdomain: "b", custom_domain: "b.example.com", custom_domain_optional: true } },
+            { publication: { subdomain: "c", custom_domain: null } }
+          ]
+        })
+      );
+
+      const pubs = await api.getUserPublicationsWithInfo();
+
+      expect(pubs.map((p) => [p.subdomain, p.customDomain])).toEqual([
+        ["a", "a.example.com"],
+        ["b", undefined],
+        ["c", undefined]
+      ]);
+      expect(api.getUserId()).toBe(42);
+    });
+
+    it("credits new drafts to the known user", async () => {
+      api = new SubstackAPI("substack.sid=test123", { userId: 42 });
+      vi.mocked(requestUrl).mockResolvedValueOnce(mockResponse(200, { id: 1 }));
+
+      await api.createDraft("mypub", "T", { type: "doc", content: [] });
+
+      const body = JSON.parse((vi.mocked(requestUrl).mock.calls[0]?.[0] as RequestUrlParam).body as string);
+      expect(body.draft_bylines).toEqual([{ id: 42, is_guest: false }]);
     });
   });
 });

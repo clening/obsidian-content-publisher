@@ -189,7 +189,7 @@ export interface SubstackFrontmatter {
 
 // API response types
 export interface SubstackDraftResponse {
-  id: string;
+  id: string | number; // Substack sends a number
   title: string;
   subtitle: string;
   slug: string;

@@ -30,6 +30,10 @@ interface SubstackPublisherSettings {
   logLevel: LogLevel;
   substackCookie: string;
   publications: string[];
+  // Detected on refresh: publication subdomain -> custom domain
+  substackCustomDomains: Record<string, string>;
+  // Detected on refresh: used to credit new drafts to the author
+  substackUserId: number | null;
   defaultPublication: string;
   sections: SubstackSection[];
   defaultSectionId: number | null;
@@ -59,6 +63,8 @@ const DEFAULT_SETTINGS: SubstackPublisherSettings = {
   logLevel: LogLevel.ERROR,
   substackCookie: "",
   publications: [],
+  substackCustomDomains: {},
+  substackUserId: null,
   defaultPublication: "",
   sections: [],
   defaultSectionId: null,
@@ -256,6 +262,13 @@ export default class SubstackPublisherPlugin extends Plugin {
     }
   }
 
+  createSubstackApi(): SubstackAPI {
+    return new SubstackAPI(this.settings.substackCookie, {
+      customDomains: this.settings.substackCustomDomains,
+      userId: this.settings.substackUserId
+    });
+  }
+
   async saveSettings() {
     await this.saveData(this.settings);
 
@@ -285,7 +298,7 @@ export default class SubstackPublisherPlugin extends Plugin {
       return;
     }
 
-    const api = new SubstackAPI(this.settings.substackCookie);
+    const api = this.createSubstackApi();
 
     const composer = new SubstackPostComposer(
       this.app,
@@ -1735,14 +1748,23 @@ class SubstackPublisherSettingTab extends PluginSettingTab {
           button.setDisabled(true);
 
           try {
-            const api = new SubstackAPI(this.plugin.settings.substackCookie);
+            let api = this.plugin.createSubstackApi();
 
             // Fetch publications with paid status info
             const publicationsInfo = await api.getUserPublicationsWithInfo();
+            this.plugin.settings.substackUserId = api.getUserId();
             if (publicationsInfo.length > 0) {
               this.plugin.settings.publications = publicationsInfo.map(
                 (p) => p.subdomain
               );
+
+              // Publications on a custom domain are only reachable through that domain
+              const customDomains: Record<string, string> = {};
+              for (const p of publicationsInfo) {
+                if (p.customDomain) customDomains[p.subdomain] = p.customDomain;
+              }
+              this.plugin.settings.substackCustomDomains = customDomains;
+              api = this.plugin.createSubstackApi();
 
               // Auto-detect paid subscriptions for the default publication
               const defaultPubInfo =
@@ -1827,7 +1849,7 @@ class SubstackPublisherSettingTab extends PluginSettingTab {
           this.plugin.settings.defaultPublication = value;
           // Reload sections for new publication
           if (this.plugin.settings.substackCookie) {
-            const api = new SubstackAPI(this.plugin.settings.substackCookie);
+            const api = this.plugin.createSubstackApi();
             this.plugin.settings.sections = await api.getSections(value);
             const firstLive = this.plugin.settings.sections.find(
               (s) => s.is_live
