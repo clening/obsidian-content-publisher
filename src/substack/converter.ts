@@ -6,6 +6,7 @@
 import {
   TextContent,
   InlineContent,
+  FootnoteBlock,
   ParagraphBlock,
   HeaderBlock,
   BulletListBlock,
@@ -22,6 +23,21 @@ import {
 const ESCAPED_ASTERISK = "\x00ESCAPED_ASTERISK\x00";
 const ESCAPED_BRACKET_OPEN = "\x00ESCAPED_BRACKET_OPEN\x00";
 const ESCAPED_BRACKET_CLOSE = "\x00ESCAPED_BRACKET_CLOSE\x00";
+
+// Footnote definition line: "[^id]: text"
+const FOOTNOTE_DEFINITION = /^\[\^([^\]\s]+)\]:[ \t]?(.*)$/;
+// Indented continuation line of a footnote definition
+const FOOTNOTE_CONTINUATION = /^( {2,}|\t)\S/;
+
+/**
+ * Footnote bookkeeping for a single conversion.
+ * Footnotes are numbered in order of first reference, like Obsidian's reading view.
+ */
+interface FootnoteState {
+  definitions: Map<string, string>;
+  numbers: Map<string, number>;
+  inline: Array<{ number: number; text: string }>;
+}
 
 /**
  * Builder class for creating Substack JSON blocks
@@ -84,7 +100,7 @@ class BlockBuilder {
     return block;
   }
 
-  blockquote(content: string): BlockquoteBlock {
+  blockquote(content: string | InlineContent[]): BlockquoteBlock {
     return {
       type: "blockquote",
       content: [this.paragraph(content)]
@@ -133,6 +149,7 @@ class BlockBuilder {
  */
 export class MarkdownConverter {
   private builder: BlockBuilder;
+  private footnotes: FootnoteState | null = null;
 
   constructor() {
     this.builder = new BlockBuilder();
@@ -142,11 +159,91 @@ export class MarkdownConverter {
    * Convert markdown text to Substack document format
    */
   convert(markdown: string): SubstackDocument {
-    const blocks = this.convertToBlocks(markdown);
-    return {
-      type: "doc",
-      content: blocks
-    };
+    this.footnotes = { definitions: new Map(), numbers: new Map(), inline: [] };
+    try {
+      const body = this.extractFootnoteDefinitions(markdown ?? "");
+      const blocks = this.convertToBlocks(body);
+      blocks.push(...this.buildFootnoteBlocks());
+      return {
+        type: "doc",
+        content: blocks
+      };
+    } finally {
+      this.footnotes = null;
+    }
+  }
+
+  /**
+   * Remove footnote definitions from the markdown and record them.
+   * Supports multi-paragraph definitions via indented continuation lines.
+   * Definitions inside fenced code blocks are left untouched.
+   */
+  private extractFootnoteDefinitions(markdown: string): string {
+    const lines = markdown.split("\n");
+    const kept: string[] = [];
+    let inFence = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i] ?? "";
+      const match = inFence ? null : line.match(FOOTNOTE_DEFINITION);
+
+      if (match && match[1] !== undefined) {
+        const parts = [match[2] ?? ""];
+        while (i + 1 < lines.length) {
+          const next = lines[i + 1] ?? "";
+          if (FOOTNOTE_CONTINUATION.test(next)) {
+            parts.push(next.replace(/^( {1,4}|\t)/, ""));
+            i++;
+          } else if (
+            !next.trim() &&
+            FOOTNOTE_CONTINUATION.test(lines[i + 2] ?? "")
+          ) {
+            parts.push("");
+            i++;
+          } else {
+            break;
+          }
+        }
+        this.footnotes?.definitions.set(match[1], parts.join("\n").trim());
+        continue;
+      }
+
+      if (/^\s*(```|~~~)/.test(line)) {
+        inFence = !inFence;
+      }
+      kept.push(line);
+    }
+
+    return kept.join("\n");
+  }
+
+  private nextFootnoteNumber(): number {
+    const state = this.footnotes;
+    return state ? state.numbers.size + state.inline.length + 1 : 1;
+  }
+
+  private buildFootnoteBlocks(): FootnoteBlock[] {
+    const state = this.footnotes;
+    if (!state) return [];
+
+    const notes: Array<{ number: number; text: string }> = [...state.inline];
+    for (const [id, number] of state.numbers) {
+      notes.push({ number, text: state.definitions.get(id) ?? "" });
+    }
+
+    return notes
+      .sort((a, b) => a.number - b.number)
+      .map((note) => ({
+        type: "footnote" as const,
+        attrs: { number: note.number },
+        content: note.text
+          .split(/\n\s*\n/)
+          .map((para) =>
+            this.builder.paragraph(
+              this.parseInlineFormatting(para.replace(/\n/g, " ").trim())
+            )
+          )
+      }));
   }
 
   /**
@@ -293,7 +390,10 @@ export class MarkdownConverter {
 
     if (quoteLines.length > 0) {
       const quoteText = quoteLines.join(" ");
-      return { block: this.builder.blockquote(quoteText), nextIndex: i };
+      return {
+        block: this.builder.blockquote(this.parseInlineFormatting(quoteText)),
+        nextIndex: i
+      };
     }
 
     return { block: null, nextIndex: start + 1 };
@@ -436,17 +536,19 @@ export class MarkdownConverter {
     return { block: null, nextIndex: start + 1 };
   }
 
-  private parseInlineFormatting(text: string): TextContent[] {
+  private parseInlineFormatting(text: string): InlineContent[] {
     // Handle escaped characters
     const processedText = text
       .replace(/\\\*/g, ESCAPED_ASTERISK)
       .replace(/\\\[/g, ESCAPED_BRACKET_OPEN)
       .replace(/\\\]/g, ESCAPED_BRACKET_CLOSE);
 
-    const elements: TextContent[] = [];
+    const elements: InlineContent[] = [];
     let remaining = processedText;
 
     const patterns: Array<{ regex: RegExp; type: string }> = [
+      { regex: /\[\^([^\]\s]+)\]/, type: "footnote_ref" },
+      { regex: /\^\[([^\]]+)\]/, type: "footnote_inline" },
       { regex: /\*\*\*([^*]+)\*\*\*/, type: "bold_italic" },
       { regex: /\*\*([^*]+)\*\*/, type: "bold" },
       { regex: /\*([^*]+)\*/, type: "italic" },
@@ -479,25 +581,59 @@ export class MarkdownConverter {
 
         // Add the formatted element
         switch (nextType) {
+        case "footnote_ref": {
+          const id = nextMatch[1] ?? "";
+          const state = this.footnotes;
+          if (state && state.definitions.has(id)) {
+            let number = state.numbers.get(id);
+            if (number === undefined) {
+              number = this.nextFootnoteNumber();
+              state.numbers.set(id, number);
+            }
+            elements.push({ type: "footnoteAnchor", attrs: { number } });
+          } else {
+            // Undefined reference: keep the literal text
+            elements.push(
+              this.restoreEscapedChars({ type: "text", text: nextMatch[0] })
+            );
+          }
+          break;
+        }
+        case "footnote_inline": {
+          const state = this.footnotes;
+          if (state) {
+            const number = this.nextFootnoteNumber();
+            state.inline.push({ number, text: nextMatch[1] ?? "" });
+            elements.push({ type: "footnoteAnchor", attrs: { number } });
+          } else {
+            elements.push(
+              this.restoreEscapedChars({ type: "text", text: nextMatch[0] })
+            );
+          }
+          break;
+        }
+        // Emphasis content is parsed recursively so it can contain
+        // links and footnote references
         case "bold_italic":
           elements.push(
-            this.restoreEscapedChars(
-              this.builder.text(nextMatch[1] ?? "", ["strong", "em"])
-            )
+            ...this.withMarks(this.parseInlineFormatting(nextMatch[1] ?? ""), [
+              "strong",
+              "em"
+            ])
           );
           break;
         case "bold":
           elements.push(
-            this.restoreEscapedChars(
-              this.builder.text(nextMatch[1] ?? "", ["strong"])
-            )
+            ...this.withMarks(this.parseInlineFormatting(nextMatch[1] ?? ""), [
+              "strong"
+            ])
           );
           break;
         case "italic":
           elements.push(
-            this.restoreEscapedChars(
-              this.builder.text(nextMatch[1] ?? "", ["em"])
-            )
+            ...this.withMarks(this.parseInlineFormatting(nextMatch[1] ?? ""), [
+              "em"
+            ])
           );
           break;
         case "link":
@@ -527,6 +663,21 @@ export class MarkdownConverter {
     }
 
     return elements.length > 0 ? elements : [{ type: "text", text: "" }];
+  }
+
+  private withMarks(
+    elements: InlineContent[],
+    marks: Array<"strong" | "em">
+  ): InlineContent[] {
+    for (const element of elements) {
+      if (element.type === "text" && element.text) {
+        element.marks = [
+          ...(element.marks ?? []),
+          ...marks.map((type) => ({ type }))
+        ];
+      }
+    }
+    return elements;
   }
 
   private restoreEscapedChars(element: TextContent): TextContent {

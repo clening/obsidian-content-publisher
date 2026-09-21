@@ -344,4 +344,112 @@ code();
       expect(types).toContain("codeBlock");
     });
   });
+
+  describe("footnotes", () => {
+    const footnotes = (doc: ReturnType<MarkdownConverter["convert"]>) =>
+      doc.content.filter((b) => b.type === "footnote");
+
+    it("converts references and definitions to Substack footnotes", () => {
+      const result = converter.convert("Claim[^1].\n\n[^1]: Source.");
+
+      expect(result.content[0]).toEqual({
+        type: "paragraph",
+        content: [
+          { type: "text", text: "Claim" },
+          { type: "footnoteAnchor", attrs: { number: 1 } },
+          { type: "text", text: "." }
+        ]
+      });
+      expect(result.content[1]).toEqual({
+        type: "footnote",
+        attrs: { number: 1 },
+        content: [{ type: "paragraph", content: [{ type: "text", text: "Source." }] }]
+      });
+    });
+
+    it("numbers footnotes by first reference and reuses numbers", () => {
+      const result = converter.convert(
+        "A[^b] B[^a] C[^b]\n\n[^a]: Note a\n[^b]: Note b"
+      );
+      const para = result.content[0] as { content: unknown[] };
+
+      expect(para.content.filter((n) => (n as { type: string }).type === "footnoteAnchor")).toEqual([
+        { type: "footnoteAnchor", attrs: { number: 1 } },
+        { type: "footnoteAnchor", attrs: { number: 2 } },
+        { type: "footnoteAnchor", attrs: { number: 1 } }
+      ]);
+      expect(footnotes(result).map((f) => JSON.stringify(f))).toEqual([
+        JSON.stringify({ type: "footnote", attrs: { number: 1 }, content: [{ type: "paragraph", content: [{ type: "text", text: "Note b" }] }] }),
+        JSON.stringify({ type: "footnote", attrs: { number: 2 }, content: [{ type: "paragraph", content: [{ type: "text", text: "Note a" }] }] })
+      ]);
+    });
+
+    it("supports multi-paragraph definitions and inline formatting", () => {
+      const result = converter.convert(
+        "X[^n]\n\n[^n]: First *line*\n    continued.\n\n    Second [link](https://example.com)."
+      );
+      const note = footnotes(result)[0] as { content: Array<{ content: unknown[] }> };
+
+      expect(note.content).toHaveLength(2);
+      expect(note.content[0]?.content).toEqual([
+        { type: "text", text: "First " },
+        { type: "text", text: "line", marks: [{ type: "em" }] },
+        { type: "text", text: " continued." }
+      ]);
+      expect(note.content[1]?.content).toContainEqual({
+        type: "text",
+        text: "link",
+        marks: [{ type: "link", attrs: { href: "https://example.com" } }]
+      });
+    });
+
+    it("supports Obsidian inline footnotes", () => {
+      const result = converter.convert("Fact^[Inline note.] and more[^1].\n\n[^1]: Defined.");
+
+      expect(footnotes(result).map((f) => (f as { attrs: { number: number } }).attrs.number)).toEqual([1, 2]);
+      expect(JSON.stringify(footnotes(result)[0])).toContain("Inline note.");
+    });
+
+    it("finds references inside emphasis, lists, and blockquotes", () => {
+      const result = converter.convert(
+        "**Bold[^1]**\n\n- Item[^1]\n\n> Quote[^1]\n\n[^1]: Note."
+      );
+      const anchors = JSON.stringify(result).match(/"footnoteAnchor"/g) ?? [];
+
+      expect(anchors).toHaveLength(3);
+      expect((result.content[0] as { content: unknown[] }).content[0]).toEqual({
+        type: "text",
+        text: "Bold",
+        marks: [{ type: "strong" }]
+      });
+    });
+
+    it("leaves undefined references and code untouched", () => {
+      const result = converter.convert(
+        "Missing[^x] and `[^1]`\n\n```\n[^1]: in code\n```\n\n[^1]: Real."
+      );
+
+      const para = result.content[0] as { content: Array<{ text?: string; marks?: unknown }> };
+      expect(para.content.map((n) => n.text).join("")).toBe("Missing[^x] and [^1]");
+      expect(para.content[para.content.length - 1]).toEqual({
+        type: "text",
+        text: "[^1]",
+        marks: [{ type: "code" }]
+      });
+      expect(result.content[1]).toMatchObject({
+        type: "codeBlock",
+        content: [{ type: "text", text: "[^1]: in code" }]
+      });
+      expect(footnotes(result)).toHaveLength(0);
+    });
+
+    it("does not carry footnotes over between conversions", () => {
+      converter.convert("A[^1]\n\n[^1]: One.");
+      const result = converter.convert("B[^z]\n\n[^z]: Zed.");
+
+      expect(footnotes(result)).toHaveLength(1);
+      expect((footnotes(result)[0] as { attrs: { number: number } }).attrs.number).toBe(1);
+    });
+  });
 });
+

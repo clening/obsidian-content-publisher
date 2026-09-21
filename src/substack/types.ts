@@ -23,8 +23,16 @@ export interface HardBreak {
   type: "hardBreak";
 }
 
+// Inline footnote reference (renders as a superscript number linked to its footnote)
+export interface FootnoteAnchor {
+  type: "footnoteAnchor";
+  attrs: {
+    number: number;
+  };
+}
+
 // Content that can appear inside a paragraph
-export type InlineContent = TextContent | HardBreak;
+export type InlineContent = TextContent | HardBreak | FootnoteAnchor;
 
 // Paragraph block
 export interface ParagraphBlock {
@@ -123,6 +131,15 @@ export interface CaptionedImageBlock {
   content?: ParagraphBlock[];
 }
 
+// Footnote body, placed at the end of the document
+export interface FootnoteBlock {
+  type: "footnote";
+  attrs: {
+    number: number;
+  };
+  content: ParagraphBlock[];
+}
+
 // Union of all block types
 export type SubstackBlock =
   | ParagraphBlock
@@ -134,7 +151,8 @@ export type SubstackBlock =
   | ImageBlock
   | CaptionedImageBlock
   | HorizontalRuleBlock
-  | PaywallBlock;
+  | PaywallBlock
+  | FootnoteBlock;
 
 // Document structure
 export interface SubstackDocument {
